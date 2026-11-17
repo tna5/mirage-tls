@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/mirage-core", "crates/mirage-napi"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+lto = true
+codegen-units = 1
+# Work-around: ld-27106 (Xcode 27) emits a "mis-aligned LINKEDIT string pool" in
+# dylibs built without any debug info, which dyld refuses to load.
+debug = "line-tables-only"
+
+# BoringSSL with the boring2 patches + our own (vendor/boring-sys2/patches/mirage.patch).
+[patch.crates-io]
+boring-sys2 = { path = "vendor/boring-sys2" }

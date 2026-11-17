@@ -1,0 +1,118 @@
+# Mozilla Firefox (NSS). Emulated with BoringSSL patches: fixed extension order,
+# record_size_limit, delegated_credentials, 3 key shares, FFDHE groups.
+
+[meta]
+family = "firefox"
+default_major = 158
+min_major = 135
+default_platform = "macos"
+verified = false
+notes = "Built from the known Firefox 135+ layout (ML-KEM, zstd cert compression). Verify against a real capture."
+
+[vars]
+ua_os = "Macintosh; Intel Mac OS X 10.15"
+ua = "Mozilla/5.0 ({ua_os}; rv:{major}.0) Gecko/20100101 Firefox/{major}.0"
+
+[tls]
+min_version = "1.2"
+max_version = "1.3"
+ciphers = [
+  "TLS_AES_128_GCM_SHA256",
+  "TLS_CHACHA20_POLY1305_SHA256",
+  "TLS_AES_256_GCM_SHA384",
+  "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+  "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+  "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+  "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+  "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+  "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+  "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+  "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+  "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+  "TLS_RSA_WITH_AES_128_GCM_SHA256",
+  "TLS_RSA_WITH_AES_256_GCM_SHA384",
+  "TLS_RSA_WITH_AES_128_CBC_SHA",
+  "TLS_RSA_WITH_AES_256_CBC_SHA",
+]
+curves = ["X25519MLKEM768", "X25519", "P-256", "P-384", "P-521", "ffdhe2048", "ffdhe3072"]
+sigalgs = [
+  "ecdsa_secp256r1_sha256",
+  "ecdsa_secp384r1_sha384",
+  "ecdsa_secp521r1_sha512",
+  "rsa_pss_rsae_sha256",
+  "rsa_pss_rsae_sha384",
+  "rsa_pss_rsae_sha512",
+  "rsa_pkcs1_sha256",
+  "rsa_pkcs1_sha384",
+  "rsa_pkcs1_sha512",
+  "ecdsa_sha1",
+  "rsa_pkcs1_sha1",
+]
+alpn = ["h2", "http/1.1"]
+grease = false
+permute_extensions = false
+extension_order = [
+  "server_name",
+  "extended_master_secret",
+  "renegotiate",
+  "supported_groups",
+  "ec_point_formats",
+  "session_ticket",
+  "application_layer_protocol_negotiation",
+  "status_request",
+  "delegated_credential",
+  "certificate_timestamp",
+  "key_share",
+  "supported_versions",
+  "signature_algorithms",
+  "psk_key_exchange_modes",
+  "record_size_limit",
+  "cert_compression",
+  "encrypted_client_hello",
+]
+ech_grease = true
+cert_compression = ["zlib", "brotli", "zstd"]
+ocsp_stapling = true
+signed_cert_timestamps = true
+record_size_limit = 16385
+delegated_credentials = ["ecdsa_secp256r1_sha256", "ecdsa_secp384r1_sha384", "ecdsa_secp521r1_sha512", "ecdsa_sha1"]
+key_shares_limit = 3
+aes_hw_override = true
+
+[http2]
+settings = [[1, 65536], [2, 0], [4, 131072], [5, 16384]]
+window_update = 12517377
+pseudo_header_order = ["m", "p", "a", "s"]
+headers_priority = { weight = 42, depends_on = 0, exclusive = false }
+
+[headers]
+default = [
+  ["User-Agent", "{ua}"],
+  ["Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"],
+  ["Accept-Language", "en-US,en;q=0.5"],
+  ["Accept-Encoding", "gzip, deflate, br, zstd"],
+  ["Upgrade-Insecure-Requests", "1"],
+  ["Sec-Fetch-Dest", "document"],
+  ["Sec-Fetch-Mode", "navigate"],
+  ["Sec-Fetch-Site", "none"],
+  ["Sec-Fetch-User", "?1"],
+  ["Priority", "u=0, i"],
+  ["TE", "trailers"],
+]
+order = [
+  "host", "user-agent", "accept", "accept-language", "accept-encoding", "content-type",
+  "content-length", "origin", "connection", "referer", "cookie", "upgrade-insecure-requests",
+  "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site", "sec-fetch-user", "priority", "te",
+]
+
+[platforms.macos]
+
+[platforms.windows.vars]
+ua_os = "Windows NT 10.0; Win64; x64"
+
+[platforms.linux.vars]
+ua_os = "X11; Linux x86_64"
+
+[platforms.android.vars]
+ua = "Mozilla/5.0 (Android 15; Mobile; rv:{major}.0) Gecko/{major}.0 Firefox/{major}.0"

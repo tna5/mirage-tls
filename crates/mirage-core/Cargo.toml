@@ -1,0 +1,29 @@
+[package]
+name = "mirage-core"
+description = "HTTP client with exact browser TLS / HTTP2 fingerprints"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+boring2 = { version = "4.15", features = ["cert-compression"] }
+boring-sys2 = "4.15"
+tokio-boring2 = "4.15"
+tokio = { version = "1", features = ["net", "io-util", "rt-multi-thread", "macros", "time", "sync"] }
+fluke-hpack = "0.3"
+httparse = "1"
+bytes = "1"
+http = "1"
+url = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+thiserror = "2"
+flate2 = "1"
+brotli = "8"
+zstd = "0.13"
+cookie_store = "0.21"
+base64 = "0.22"
+rand = "0.9"
+foreign-types = "0.5"
+webpki-root-certs = "1"

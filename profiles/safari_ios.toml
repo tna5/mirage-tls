@@ -1,0 +1,105 @@
+# Safari on iOS / iPadOS. Every iOS browser (Chrome, Firefox, Edge on iOS) uses WebKit,
+# so they share this network fingerprint; only the UA differs (see platforms).
+
+[meta]
+family = "safari_ios"
+default_major = 26
+min_major = 26
+default_platform = "iphone"
+verified = false
+notes = "Same TLS/HTTP2 layout as Safari macOS. Verify against a real capture."
+
+[vars]
+ios = "18_6"
+ua = "Mozilla/5.0 (iPhone; CPU iPhone OS {ios} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{major}.0 Mobile/15E148 Safari/604.1"
+
+[tls]
+min_version = "1.0"
+max_version = "1.3"
+ciphers = [
+  "TLS_AES_128_GCM_SHA256",
+  "TLS_AES_256_GCM_SHA384",
+  "TLS_CHACHA20_POLY1305_SHA256",
+  "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+  "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+  "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+  "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+  "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+  "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+  "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+  "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+  "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+  "TLS_RSA_WITH_AES_256_GCM_SHA384",
+  "TLS_RSA_WITH_AES_128_GCM_SHA256",
+  "TLS_RSA_WITH_AES_256_CBC_SHA",
+  "TLS_RSA_WITH_AES_128_CBC_SHA",
+  "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA",
+  "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
+  "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+]
+curves = ["X25519MLKEM768", "X25519", "P-256", "P-384", "P-521"]
+sigalgs = [
+  "ecdsa_secp256r1_sha256",
+  "rsa_pss_rsae_sha256",
+  "rsa_pkcs1_sha256",
+  "ecdsa_secp384r1_sha384",
+  "rsa_pss_rsae_sha384",
+  "rsa_pkcs1_sha384",
+  "rsa_pss_rsae_sha512",
+  "rsa_pkcs1_sha512",
+  "rsa_pkcs1_sha1",
+]
+alpn = ["h2", "http/1.1"]
+grease = true
+permute_extensions = false
+extension_order = [
+  "server_name",
+  "extended_master_secret",
+  "renegotiate",
+  "supported_groups",
+  "ec_point_formats",
+  "application_layer_protocol_negotiation",
+  "status_request",
+  "signature_algorithms",
+  "certificate_timestamp",
+  "key_share",
+  "psk_key_exchange_modes",
+  "supported_versions",
+  "cert_compression",
+  "padding",
+]
+cert_compression = ["zlib"]
+ocsp_stapling = true
+signed_cert_timestamps = true
+session_ticket = false
+
+[http2]
+settings = [[2, 0], [3, 100], [4, 2097152], [9, 1]]
+window_update = 10420225
+pseudo_header_order = ["m", "s", "a", "p"]
+
+[headers]
+default = [
+  ["Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"],
+  ["Sec-Fetch-Site", "none"],
+  ["Sec-Fetch-Mode", "navigate"],
+  ["User-Agent", "{ua}"],
+  ["Accept-Language", "en-US,en;q=0.9"],
+  ["Sec-Fetch-Dest", "document"],
+  ["Accept-Encoding", "gzip, deflate, br"],
+  ["Priority", "u=0, i"],
+]
+order = [
+  "host", "content-type", "origin", "content-length", "accept", "sec-fetch-site", "sec-fetch-mode",
+  "user-agent", "referer", "accept-language", "sec-fetch-dest", "accept-encoding", "cookie",
+  "priority", "connection",
+]
+
+[platforms.iphone]
+
+[platforms.ipad.vars]
+ua = "Mozilla/5.0 (iPad; CPU OS {ios} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{major}.0 Mobile/15E148 Safari/604.1"
+
+[platforms.chrome.vars]
+ua = "Mozilla/5.0 (iPhone; CPU iPhone OS {ios} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157.0.0.0 Mobile/15E148 Safari/604.1"

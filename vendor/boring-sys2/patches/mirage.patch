@@ -1,0 +1,158 @@
+diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
+index 0000201..3180829 100644
+--- a/src/include/openssl/ssl.h
++++ b/src/include/openssl/ssl.h
+@@ -4588,6 +4588,20 @@ OPENSSL_EXPORT void SSL_set_permute_extensions(SSL *ssl, int enabled);
+ 
+ // SSL_CTX_set_extension_permutation configures whether sockets on |ctx| should
+ // permute extensions. For now, this is only implemented for the ClientHello.
++// mirage: advertise exactly |sigalgs| in the ClientHello signature_algorithms
++// extension (verification still uses the verify prefs).
++OPENSSL_EXPORT int SSL_CTX_mirage_set_advertised_sigalgs(SSL_CTX *ctx,
++                                                         const uint16_t *sigalgs,
++                                                         size_t num_sigalgs);
++
++// mirage: prepend a GREASE value to signature_algorithms.
++OPENSSL_EXPORT void SSL_CTX_mirage_set_grease_sigalgs(SSL_CTX *ctx, int enabled);
++
++// mirage: send the trust_anchors (0xca34) extension with |data| as its body.
++OPENSSL_EXPORT int SSL_CTX_mirage_set_trust_anchors(SSL_CTX *ctx,
++                                                    const uint8_t *data,
++                                                    size_t len);
++
+ OPENSSL_EXPORT int SSL_CTX_set_extension_permutation(SSL_CTX* ctx, const uint8_t *permutation,
+                                        size_t permutation_len);
+ 
+diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
+index 6456249..7077dff 100644
+--- a/src/ssl/extensions.cc
++++ b/src/ssl/extensions.cc
+@@ -1086,12 +1086,54 @@ static bool ext_sigalgs_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
+   CBB contents, sigalgs_cbb;
+   if (!CBB_add_u16(out_compressible, TLSEXT_TYPE_signature_algorithms) ||
+       !CBB_add_u16_length_prefixed(out_compressible, &contents) ||
+-      !CBB_add_u16_length_prefixed(&contents, &sigalgs_cbb) ||
+-      !tls12_add_verify_sigalgs(hs, &sigalgs_cbb) ||
++      !CBB_add_u16_length_prefixed(&contents, &sigalgs_cbb)) {
++    return false;
++  }
++  const SSL_CTX *ctx = hs->ssl->ctx.get();
++  if (ctx->mirage_grease_sigalgs &&
++      !CBB_add_u16(&sigalgs_cbb,
++                   ssl_get_grease_value(hs, ssl_grease_signature_algorithm))) {
++    return false;
++  }
++  if (!ctx->mirage_advertised_sigalgs.empty()) {
++    for (uint16_t sigalg : ctx->mirage_advertised_sigalgs) {
++      if (!CBB_add_u16(&sigalgs_cbb, sigalg)) {
++        return false;
++      }
++    }
++  } else if (!tls12_add_verify_sigalgs(hs, &sigalgs_cbb)) {
++    return false;
++  }
++  if (!CBB_flush(out_compressible)) {
++    return false;
++  }
++
++  return true;
++}
++
++// mirage: trust_anchors (draft-ietf-tls-trust-anchor-ids), sent verbatim.
++static bool ext_mirage_trust_anchors_add_clienthello(
++    const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
++    ssl_client_hello_type_t type) {
++  const SSL_CTX *ctx = hs->ssl->ctx.get();
++  if (!ctx->mirage_trust_anchors_enabled || hs->max_version < TLS1_3_VERSION) {
++    return true;
++  }
++  CBB contents;
++  if (!CBB_add_u16(out_compressible, 0xca34) ||
++      !CBB_add_u16_length_prefixed(out_compressible, &contents) ||
++      !CBB_add_bytes(&contents, ctx->mirage_trust_anchors.data(),
++                     ctx->mirage_trust_anchors.size()) ||
+       !CBB_flush(out_compressible)) {
+     return false;
+   }
++  return true;
++}
+ 
++static bool ext_mirage_trust_anchors_parse_serverhello(SSL_HANDSHAKE *hs,
++                                                       uint8_t *out_alert,
++                                                       CBS *contents) {
++  // The server may list its available trust anchors; we do not use them.
+   return true;
+ }
+ 
+@@ -3436,6 +3478,13 @@ static const struct tls_extension kExtensions[] = {
+     record_size_limit_parse_clienthello,
+     record_size_limit_add_serverhello,
+   },
++  {
++    0xca34,
++    ext_mirage_trust_anchors_add_clienthello,
++    ext_mirage_trust_anchors_parse_serverhello,
++    ignore_parse_clienthello,
++    dont_add_serverhello,
++  },
+ };
+ 
+ #define kNumExtensions (sizeof(kExtensions) / sizeof(struct tls_extension))
+diff --git a/src/ssl/internal.h b/src/ssl/internal.h
+index 15298c2..6e70d12 100644
+--- a/src/ssl/internal.h
++++ b/src/ssl/internal.h
+@@ -1669,7 +1669,8 @@ enum ssl_grease_index_t {
+   ssl_grease_version,
+   ssl_grease_ticket_extension,
+   ssl_grease_ech_config_id,
+-  ssl_grease_last_index = ssl_grease_ech_config_id,
++  ssl_grease_signature_algorithm,
++  ssl_grease_last_index = ssl_grease_signature_algorithm,
+ };
+ 
+ enum tls12_server_hs_state_t {
+@@ -3818,6 +3819,16 @@ struct ssl_ctx_st {
+   // extension_permutation is the permutation of extensions to send.
+   bssl::Array<uint8_t> extension_permutation;
+ 
++  // mirage: signature algorithms advertised in the ClientHello, verbatim.
++  // When empty, the verify prefs are used. Values not known to BoringSSL
++  // (e.g. ML-DSA) can be advertised; the server can only pick verify prefs.
++  bssl::Array<uint16_t> mirage_advertised_sigalgs;
++  // mirage: prepend a GREASE value to signature_algorithms (Chrome >= 14x).
++  bool mirage_grease_sigalgs = false;
++  // mirage: raw body of the trust_anchors (0xca34) extension.
++  bool mirage_trust_anchors_enabled = false;
++  bssl::Array<uint8_t> mirage_trust_anchors;
++
+  private:
+   ~ssl_ctx_st();
+   friend OPENSSL_EXPORT void SSL_CTX_free(SSL_CTX *);
+diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
+index 3242769..53ddf94 100644
+--- a/src/ssl/ssl_lib.cc
++++ b/src/ssl/ssl_lib.cc
+@@ -2992,6 +2992,22 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
+   ssl->config->permute_extensions = !!enabled;
+ }
+ 
++int SSL_CTX_mirage_set_advertised_sigalgs(SSL_CTX *ctx, const uint16_t *sigalgs,
++                                          size_t num_sigalgs) {
++  return ctx->mirage_advertised_sigalgs.CopyFrom(
++      bssl::MakeConstSpan(sigalgs, num_sigalgs));
++}
++
++void SSL_CTX_mirage_set_grease_sigalgs(SSL_CTX *ctx, int enabled) {
++  ctx->mirage_grease_sigalgs = !!enabled;
++}
++
++int SSL_CTX_mirage_set_trust_anchors(SSL_CTX *ctx, const uint8_t *data,
++                                     size_t len) {
++  ctx->mirage_trust_anchors_enabled = true;
++  return ctx->mirage_trust_anchors.CopyFrom(bssl::MakeConstSpan(data, len));
++}
++
+ int SSL_CTX_set_extension_permutation(SSL_CTX *ctx, const uint8_t *permutation, size_t permutation_len) {
+   if (!permutation || permutation_len == 0) {
+     return 0;
