@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="mirage-tls: real browser TLS fingerprints for Node and Bun. Supported and verified today: Chrome 157 on macOS. Coming next: Firefox, Safari, Edge, iOS, OkHttp.">
+  <defs>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.45" stop-color="#f4f4f5" stop-opacity="0"/>
+      <stop offset="1" stop-color="#f4f4f5" stop-opacity="0.22"/>
+    </linearGradient>
+    <filter id="haze" x="-5%" y="-30%" width="110%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.004 0.09" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="1.2"/></filter>
+  </defs>
+  <rect width="1280" height="320" fill="#0b0b0c"/>
+  <line x1="0" y1="168" x2="790" y2="168" stroke="#f4f4f5" stroke-opacity="0.08"/>
+  <line x1="830" y1="84" x2="830" y2="270" stroke="#f4f4f5" stroke-opacity="0.12"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="76" y="152" font-size="86" font-weight="800" letter-spacing="-3.2" text-anchor="start" fill="#f4f4f5">mirage-tls</text>
+    <g transform="translate(0 336) scale(1 -1)" filter="url(#haze)"><text x="76" y="152" font-size="86" font-weight="800" letter-spacing="-3.2" text-anchor="start" fill="url(#fade)">mirage-tls</text></g>
+    <text x="80" y="262" font-size="20" fill="#8b8b90">Real browser TLS fingerprints for Node &amp; Bun</text>
+    <text x="870" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="3" fill="#5c5c62">SUPPORTED</text>
+    <text x="870" y="134" font-size="17" fill="#f4f4f5">Chrome 157</text>
+    <text x="870" y="160" font-size="17" fill="#f4f4f5">macOS</text>
+    <text x="870" y="186" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="1" fill="#8b8b90">✓ verified</text>
+    <text x="1050" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="3" fill="#5c5c62">COMING NEXT</text>
+    <text x="1050" y="134" font-size="17" fill="#5c5c62">Firefox</text>
+    <text x="1050" y="160" font-size="17" fill="#5c5c62">Safari</text>
+    <text x="1050" y="186" font-size="17" fill="#5c5c62">Edge</text>
+    <text x="1050" y="212" font-size="17" fill="#5c5c62">iOS</text>
+    <text x="1050" y="238" font-size="17" fill="#5c5c62">OkHttp</text>
+  </g>
+</svg>

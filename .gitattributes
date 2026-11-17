@@ -1,0 +1,13 @@
+# Keep LF everywhere, including on Windows checkouts: boring-sys2 applies the
+# BoringSSL patches with `git apply`, which fails on CRLF-converted sources.
+* text=auto eol=lf
+
+*.node binary
+*.png binary
+*.jpg binary
+*.ico binary
+
+# Vendored third-party code and generated files: collapse in diffs / stats.
+vendor/** linguist-vendored
+crates/mirage-napi/native.js linguist-generated
+crates/mirage-napi/native.d.ts linguist-generated

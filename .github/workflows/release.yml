@@ -1,0 +1,95 @@
+# Release: push a tag `v<version>` matching crates/mirage-napi/package.json "version".
+# Builds all targets, publishes the per-platform packages (mirage-tls-<platform>)
+# and then the main `mirage-tls` package to npm with provenance, and creates a
+# GitHub release with the .node binaries attached.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      run-tests: true
+
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    defaults:
+      run:
+        working-directory: crates/mirage-napi
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Check tag matches package version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          case "$version" in
+            *-*) echo "dist_tag=next" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "dist_tag=latest" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: npm ci
+        run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: crates/mirage-napi/artifacts
+
+      - name: Move binaries into npm/<platform>
+        run: |
+          npx napi artifacts --output-dir artifacts
+          for dir in npm/*/; do
+            cp ../../LICENSE ../../THIRD_PARTY_NOTICES.md "$dir"
+          done
+          ls -l npm/*
+
+      - name: Publish platform packages
+        run: |
+          for dir in npm/*/; do
+            name=$(node -p "require('./${dir}package.json').name")
+            version=$(node -p "require('./${dir}package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version already published, skipping"
+              continue
+            fi
+            (cd "$dir" && npm publish --provenance --access public --tag "${{ steps.version.outputs.dist_tag }}")
+          done
+
+      # prepublishOnly runs `napi pre-publish` (sets optionalDependencies, validates
+      # npm/<platform>) and prepack copies README.md / LICENSE / THIRD_PARTY_NOTICES.md.
+      - name: Publish mirage-tls
+        run: npm publish --provenance --access public --tag "${{ steps.version.outputs.dist_tag }}"
+
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: crates/mirage-napi/npm/*/*.node

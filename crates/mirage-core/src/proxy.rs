@@ -1,11 +1,12 @@
 //! TCP connection establishment, directly or through an HTTP (CONNECT) / SOCKS5 proxy.
 
 use crate::error::{Error, Result};
+use crate::net::NetOptions;
 use base64::Engine;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ProxyKind {
     Http,
     /// `remote_dns`: socks5h:// lets the proxy resolve the host name.
@@ -57,20 +58,24 @@ fn percent_decode(s: &str) -> String {
         .unwrap_or_else(|| s.to_string())
 }
 
-/// Open a TCP stream to `host:port`, tunnelled through `proxy` if set.
-pub async fn connect(proxy: Option<&Proxy>, host: &str, port: u16, user_agent: Option<&str>) -> Result<TcpStream> {
+/// Open a TCP stream to `host:port`, tunnelled through `proxy` if set. `net` applies to
+/// the first hop (the target, or the proxy) and to local DNS resolution for SOCKS5.
+pub async fn connect(
+    proxy: Option<&Proxy>,
+    host: &str,
+    port: u16,
+    user_agent: Option<&str>,
+    net: &NetOptions,
+) -> Result<TcpStream> {
     let Some(p) = proxy else {
-        let s = TcpStream::connect((host, port)).await?;
-        s.set_nodelay(true)?;
-        return Ok(s);
+        return crate::net::connect(host, port, net).await;
     };
-    let mut s = TcpStream::connect((p.host.as_str(), p.port))
+    let mut s = crate::net::connect(&p.host, p.port, net)
         .await
         .map_err(|e| Error::Proxy(format!("cannot reach proxy {}:{}: {e}", p.host, p.port)))?;
-    s.set_nodelay(true)?;
     match p.kind {
         ProxyKind::Http => http_connect(&mut s, p, host, port, user_agent).await?,
-        ProxyKind::Socks5 { remote_dns } => socks5(&mut s, p, host, port, remote_dns).await?,
+        ProxyKind::Socks5 { remote_dns } => socks5(&mut s, p, host, port, remote_dns, net).await?,
     }
     Ok(s)
 }
@@ -120,7 +125,7 @@ async fn http_connect(s: &mut TcpStream, p: &Proxy, host: &str, port: u16, ua: O
     Ok(())
 }
 
-async fn socks5(s: &mut TcpStream, p: &Proxy, host: &str, port: u16, remote_dns: bool) -> Result<()> {
+async fn socks5(s: &mut TcpStream, p: &Proxy, host: &str, port: u16, remote_dns: bool, net: &NetOptions) -> Result<()> {
     let methods: &[u8] = if p.auth.is_some() { &[0x00, 0x02] } else { &[0x00] };
     let mut hello = vec![0x05, methods.len() as u8];
     hello.extend_from_slice(methods);
@@ -151,9 +156,9 @@ async fn socks5(s: &mut TcpStream, p: &Proxy, host: &str, port: u16, remote_dns:
     let mut req = vec![0x05, 0x01, 0x00];
     let ip = match host.parse::<std::net::IpAddr>() {
         Ok(ip) => Some(ip),
-        Err(_) if !remote_dns => tokio::net::lookup_host((host, port))
+        Err(_) if !remote_dns => crate::net::resolve(host, port, &NetOptions { local_address: None, family: net.family })
             .await?
-            .next()
+            .first()
             .map(|a| a.ip()),
         Err(_) => None,
     };

@@ -96,6 +96,28 @@ order = [
   "priority", "connection",
 ]
 
+# Request modes: NOT verified against a capture (navigation is the base list above;
+# priority values for subresources are a best guess).
+[headers.modes.fetch]
+verified = false
+set = [["Accept", "*/*"], ["Sec-Fetch-Dest", "empty"], ["Sec-Fetch-Mode", "cors"], ["Sec-Fetch-Site", "same-origin"], ["Priority", "u=3, i"]]
+
+[headers.modes.image]
+verified = false
+set = [["Accept", "image/webp,image/avif,image/jxl,image/heic,image/heic-sequence,video/*;q=0.8,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"], ["Sec-Fetch-Dest", "image"], ["Sec-Fetch-Mode", "no-cors"], ["Sec-Fetch-Site", "same-origin"], ["Priority", "u=5, i"]]
+
+[headers.modes.script]
+verified = false
+set = [["Accept", "*/*"], ["Sec-Fetch-Dest", "script"], ["Sec-Fetch-Mode", "no-cors"], ["Sec-Fetch-Site", "same-origin"], ["Priority", "u=2"]]
+
+[headers.modes.style]
+verified = false
+set = [["Accept", "text/css,*/*;q=0.1"], ["Sec-Fetch-Dest", "style"], ["Sec-Fetch-Mode", "no-cors"], ["Sec-Fetch-Site", "same-origin"], ["Priority", "u=2"]]
+
+[headers.modes.iframe]
+verified = false
+set = [["Sec-Fetch-Dest", "iframe"]]
+
 [platforms.iphone]
 
 [platforms.ipad.vars]

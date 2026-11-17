@@ -717,6 +717,7 @@ dependencies = [
  "foreign-types",
  "http",
  "httparse",
+ "psl",
  "rand",
  "serde",
  "serde_json",
@@ -889,6 +890,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "psl"
+version = "2.1.255"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb40358efa8d957f3e793e45daedd2fef822c694e1e3a45b827b53de6175e724"
+dependencies = [
+ "psl-types",
 ]
 
 [[package]]

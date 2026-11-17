@@ -16,6 +16,12 @@ pub enum Error {
     Http(String),
     #[error("http2 error: {0}")]
     H2(String),
+    /// The server did not process the request (HTTP/2 REFUSED_STREAM, or GOAWAY for a
+    /// stream above last_stream_id): it is safe to retry, and the client does so itself.
+    #[error("request refused by server: {0}")]
+    Refused(String),
+    #[error("request cancelled")]
+    Cancelled,
     #[error("request timed out")]
     Timeout,
     #[error("too many redirects")]

@@ -170,7 +170,34 @@ pub struct HeaderProfile {
     /// Exact casing used on HTTP/1.1 (e.g. "User-Agent"). HTTP/2 always lowercases.
     #[serde(default)]
     pub h1_case: Vec<String>,
+    /// Header sets per request type (`[headers.modes.<name>]`). `default` / `order` above
+    /// describe the top-level navigation (mode "navigate").
+    #[serde(default)]
+    pub modes: BTreeMap<String, HeaderMode>,
 }
+
+/// A request type (fetch, image, script...) expressed relative to the navigation headers.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HeaderMode {
+    /// Full replacement of the default header list (in browser order).
+    #[serde(default)]
+    pub default: Option<Vec<(String, String)>>,
+    /// Headers overridden (in place) or added on top of the base list.
+    #[serde(default)]
+    pub set: Vec<(String, String)>,
+    /// Headers removed from the base list.
+    #[serde(default)]
+    pub remove: Vec<String>,
+    /// Header order for this mode (defaults to the navigation order).
+    #[serde(default)]
+    pub order: Option<Vec<String>>,
+    /// true once checked against a real browser capture.
+    #[serde(default)]
+    pub verified: bool,
+}
+
+/// The built-in navigation mode name.
+pub const NAVIGATE: &str = "navigate";
 
 impl Profile {
     /// Resolve a built-in profile by name.
@@ -264,13 +291,66 @@ impl Profile {
             .collect()
     }
 
-    /// Header order as lowercase names.
+    /// Header order as lowercase names (navigation).
     pub fn header_order(&self) -> Vec<String> {
         if self.headers.order.is_empty() {
             self.headers.default.iter().map(|(k, _)| k.to_ascii_lowercase()).collect()
         } else {
             self.headers.order.iter().map(|k| k.to_ascii_lowercase()).collect()
         }
+    }
+
+    /// Names of the request modes this profile defines ("navigate" first).
+    pub fn modes(&self) -> Vec<String> {
+        std::iter::once(NAVIGATE.to_string())
+            .chain(self.headers.modes.keys().filter(|k| *k != NAVIGATE).cloned())
+            .collect()
+    }
+
+    fn mode(&self, mode: &str) -> Result<Option<&HeaderMode>> {
+        let mode = canonical_mode(mode);
+        match self.headers.modes.get(mode) {
+            Some(m) => Ok(Some(m)),
+            None if mode == NAVIGATE => Ok(None),
+            None => Err(Error::Profile(format!(
+                "profile '{}' has no '{mode}' request mode (available: {})",
+                self.name,
+                self.modes().join(", ")
+            ))),
+        }
+    }
+
+    /// Default headers for a request mode, in browser order.
+    pub fn mode_headers(&self, mode: &str) -> Result<Vec<(String, String)>> {
+        let Some(m) = self.mode(mode)? else { return Ok(self.headers.default.clone()) };
+        let mut out = m.default.clone().unwrap_or_else(|| self.headers.default.clone());
+        out.retain(|(k, _)| !m.remove.iter().any(|r| r.eq_ignore_ascii_case(k)));
+        for (k, v) in &m.set {
+            match out.iter_mut().find(|(n, _)| n.eq_ignore_ascii_case(k)) {
+                Some(slot) => slot.1 = v.clone(),
+                None => out.push((k.clone(), v.clone())),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Header order (lowercase) for a request mode.
+    pub fn mode_order(&self, mode: &str) -> Result<Vec<String>> {
+        match self.mode(mode)?.and_then(|m| m.order.as_ref()) {
+            Some(o) => Ok(o.iter().map(|k| k.to_ascii_lowercase()).collect()),
+            None => Ok(self.header_order()),
+        }
+    }
+}
+
+/// Aliases accepted for mode names (Fetch `mode` / `destination` vocabulary).
+pub fn canonical_mode(mode: &str) -> &str {
+    match mode {
+        "" | "document" => NAVIGATE,
+        "cors" | "xhr" | "empty" | "same-origin" => "fetch",
+        "img" => "image",
+        "css" | "stylesheet" => "style",
+        other => other,
     }
 }
 
@@ -477,6 +557,35 @@ mod tests {
             .any(|(k, v)| k == "user-agent" && v.contains("Chrome/157.0.0.0") && v.contains("Windows")));
         assert!(Profile::get("chrome_100").is_err());
         assert!(Profile::get("nope").is_err());
+    }
+
+    #[test]
+    fn request_modes() {
+        let p = Profile::get("chrome_157").unwrap();
+        let nav = p.mode_headers("navigate").unwrap();
+        assert_eq!(nav, p.headers.default);
+        let f = p.mode_headers("fetch").unwrap();
+        let get = |h: &[(String, String)], k: &str| h.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+        assert_eq!(get(&f, "accept").as_deref(), Some("*/*"));
+        assert_eq!(get(&f, "sec-fetch-mode").as_deref(), Some("cors"));
+        assert_eq!(get(&f, "priority").as_deref(), Some("u=1, i"));
+        assert!(get(&f, "upgrade-insecure-requests").is_none() && get(&f, "sec-fetch-user").is_none());
+        assert_eq!(p.mode_headers("cors").unwrap(), f);
+        for m in ["image", "script", "style", "iframe"] {
+            let h = p.mode_headers(m).unwrap();
+            assert!(get(&h, "sec-fetch-user").is_none(), "{m}");
+            assert!(get(&h, "user-agent").unwrap().contains("Chrome/157"), "{m}");
+        }
+        assert_eq!(get(&p.mode_headers("iframe").unwrap(), "sec-fetch-dest").as_deref(), Some("iframe"));
+        assert!(p.mode_order("fetch").unwrap().starts_with(&["host".to_string()]));
+        assert!(Profile::get("okhttp").unwrap().mode_headers("fetch").is_err());
+        for f in ["chrome_131", "edge", "firefox", "safari", "safari_ios"] {
+            let p = Profile::get(f).unwrap();
+            for m in ["fetch", "image", "script", "style"] {
+                let h = p.mode_headers(m).unwrap();
+                assert!(h.iter().any(|(k, _)| k.eq_ignore_ascii_case("user-agent")), "{f} {m}");
+            }
+        }
     }
 
     #[test]

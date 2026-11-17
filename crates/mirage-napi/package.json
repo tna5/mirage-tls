@@ -2,7 +2,34 @@
   "name": "mirage-tls",
   "version": "0.1.0",
   "description": "fetch() with real browser TLS / HTTP2 fingerprints (Chrome, Edge, Firefox, Safari, iOS, OkHttp) for Node.js and Bun",
+  "keywords": [
+    "fetch",
+    "http",
+    "http2",
+    "tls",
+    "ja3",
+    "ja4",
+    "fingerprint",
+    "akamai",
+    "impersonate",
+    "browser",
+    "chrome",
+    "firefox",
+    "safari",
+    "boringssl",
+    "napi-rs",
+    "bun"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/tna5/mirage-tls#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tna5/mirage-tls.git",
+    "directory": "crates/mirage-napi"
+  },
+  "bugs": {
+    "url": "https://github.com/tna5/mirage-tls/issues"
+  },
   "main": "index.js",
   "module": "index.mjs",
   "types": "index.d.ts",
@@ -13,7 +40,14 @@
       "require": "./index.js"
     }
   },
-  "files": ["index.js", "index.mjs", "index.d.ts", "native.js", "native.d.ts", "*.node"],
+  "files": [
+    "index.js",
+    "index.mjs",
+    "index.d.ts",
+    "native.js",
+    "native.d.ts",
+    "THIRD_PARTY_NOTICES.md"
+  ],
   "napi": {
     "binaryName": "mirage-tls",
     "targets": [
@@ -24,11 +58,21 @@
       "x86_64-pc-windows-msvc"
     ]
   },
-  "engines": { "node": ">= 18" },
+  "engines": {
+    "node": ">= 18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "napi build --platform --release --js native.js --dts native.d.ts",
     "build:debug": "napi build --platform --js native.js --dts native.d.ts",
-    "test": "node --test test/ && bun test test/"
+    "test": "node --test test/ && bun test test/",
+    "artifacts": "napi artifacts --output-dir artifacts",
+    "prepack": "node -e \"for (const f of ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md']) require('fs').copyFileSync('../../' + f, f)\"",
+    "prepublishOnly": "napi pre-publish -t npm --skip-optional-publish --no-gh-release",
+    "version": "napi version"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.4.0"

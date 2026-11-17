@@ -8,7 +8,7 @@ default_major = 157
 min_major = 131
 default_platform = "macos"
 verified = true
-notes = "Chrome 157 macOS verified against a real capture on tls.peet.ws (2026-11-17). Versions < 157 use the older 131 layout (not re-verified)."
+notes = "Chrome 157 macOS verified against a real capture on tls.peet.ws (2026-11-17). Versions < 157 use the older 131 layout (not re-verified). Only the navigation request mode is verified; fetch/image/script/style/iframe modes are not."
 
 [vars]
 brand = "Google Chrome"
@@ -100,6 +100,111 @@ h1_case = [
   "Sec-Fetch-User", "Sec-Fetch-Dest", "Referer", "Accept-Encoding", "Accept-Language", "Cookie",
 ]
 
+# ---------------------------------------------------------------------------------------
+# Request modes. Only the navigation headers above were verified against a capture
+# (Chrome 157 macOS). The modes below follow Chrome's well-known subresource layout
+# (client hints split around user-agent, fetch-metadata, priority per resource type) but
+# have NOT been verified against a capture of this version.
+# sec-fetch-site / origin / referer values are computed per request (see fetch.rs).
+
+# fetch() / XMLHttpRequest from a page.
+[headers.modes.fetch]
+verified = false
+default = [
+  ["sec-ch-ua-platform", "{ch_platform}"],
+  ["user-agent", "{ua}"],
+  ["sec-ch-ua", "{sec_ch_ua}"],
+  ["sec-ch-ua-mobile", "{ch_mobile}"],
+  ["accept", "*/*"],
+  ["sec-fetch-site", "same-origin"],
+  ["sec-fetch-mode", "cors"],
+  ["sec-fetch-dest", "empty"],
+  ["accept-encoding", "gzip, deflate, br, zstd"],
+  ["accept-language", "en-US,en;q=0.9"],
+  ["priority", "u=1, i"],
+]
+order = [
+  "host", "connection", "content-length", "pragma", "cache-control", "sec-ch-ua-platform",
+  "user-agent", "sec-ch-ua", "content-type", "sec-ch-ua-mobile", "accept", "origin",
+  "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "referer", "accept-encoding",
+  "accept-language", "cookie", "priority",
+]
+
+# <img>
+[headers.modes.image]
+verified = false
+default = [
+  ["sec-ch-ua-platform", "{ch_platform}"],
+  ["user-agent", "{ua}"],
+  ["sec-ch-ua", "{sec_ch_ua}"],
+  ["sec-ch-ua-mobile", "{ch_mobile}"],
+  ["accept", "image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"],
+  ["sec-fetch-site", "same-origin"],
+  ["sec-fetch-mode", "no-cors"],
+  ["sec-fetch-dest", "image"],
+  ["accept-encoding", "gzip, deflate, br, zstd"],
+  ["accept-language", "en-US,en;q=0.9"],
+  ["priority", "i"],
+]
+order = [
+  "host", "connection", "content-length", "pragma", "cache-control", "sec-ch-ua-platform",
+  "user-agent", "sec-ch-ua", "content-type", "sec-ch-ua-mobile", "accept", "origin",
+  "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "referer", "accept-encoding",
+  "accept-language", "cookie", "priority",
+]
+
+# <script src> (classic, render-blocking)
+[headers.modes.script]
+verified = false
+default = [
+  ["sec-ch-ua-platform", "{ch_platform}"],
+  ["user-agent", "{ua}"],
+  ["sec-ch-ua", "{sec_ch_ua}"],
+  ["sec-ch-ua-mobile", "{ch_mobile}"],
+  ["accept", "*/*"],
+  ["sec-fetch-site", "same-origin"],
+  ["sec-fetch-mode", "no-cors"],
+  ["sec-fetch-dest", "script"],
+  ["accept-encoding", "gzip, deflate, br, zstd"],
+  ["accept-language", "en-US,en;q=0.9"],
+  ["priority", "u=1"],
+]
+order = [
+  "host", "connection", "content-length", "pragma", "cache-control", "sec-ch-ua-platform",
+  "user-agent", "sec-ch-ua", "content-type", "sec-ch-ua-mobile", "accept", "origin",
+  "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "referer", "accept-encoding",
+  "accept-language", "cookie", "priority",
+]
+
+# <link rel=stylesheet>
+[headers.modes.style]
+verified = false
+default = [
+  ["sec-ch-ua-platform", "{ch_platform}"],
+  ["user-agent", "{ua}"],
+  ["sec-ch-ua", "{sec_ch_ua}"],
+  ["sec-ch-ua-mobile", "{ch_mobile}"],
+  ["accept", "text/css,*/*;q=0.1"],
+  ["sec-fetch-site", "same-origin"],
+  ["sec-fetch-mode", "no-cors"],
+  ["sec-fetch-dest", "style"],
+  ["accept-encoding", "gzip, deflate, br, zstd"],
+  ["accept-language", "en-US,en;q=0.9"],
+  ["priority", "u=0"],
+]
+order = [
+  "host", "connection", "content-length", "pragma", "cache-control", "sec-ch-ua-platform",
+  "user-agent", "sec-ch-ua", "content-type", "sec-ch-ua-mobile", "accept", "origin",
+  "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "referer", "accept-encoding",
+  "accept-language", "cookie", "priority",
+]
+
+# Document loaded in an <iframe>: navigation headers, no user activation.
+[headers.modes.iframe]
+verified = false
+set = [["sec-fetch-dest", "iframe"]]
+remove = ["sec-fetch-user"]
+
 [platforms.macos]
 
 [platforms.windows.vars]
@@ -152,4 +257,19 @@ order = [
   "sec-ch-ua-platform", "origin", "content-type", "upgrade-insecure-requests", "user-agent", "accept",
   "sec-fetch-site", "sec-fetch-mode", "sec-fetch-user", "sec-fetch-dest", "referer",
   "accept-encoding", "accept-language", "cookie", "priority",
+]
+
+[before.157.headers.modes.image]
+default = [
+  ["sec-ch-ua-platform", "{ch_platform}"],
+  ["user-agent", "{ua}"],
+  ["sec-ch-ua", "{sec_ch_ua}"],
+  ["sec-ch-ua-mobile", "{ch_mobile}"],
+  ["accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"],
+  ["sec-fetch-site", "same-origin"],
+  ["sec-fetch-mode", "no-cors"],
+  ["sec-fetch-dest", "image"],
+  ["accept-encoding", "gzip, deflate, br, zstd"],
+  ["accept-language", "en-US,en;q=0.9"],
+  ["priority", "i"],
 ]

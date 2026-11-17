@@ -19,9 +19,11 @@ pub struct TlsConnector {
     connector: SslConnector,
     profile: Arc<Profile>,
     sessions: SessionCache,
+    resumption: bool,
+    ech_grease: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct TlsOptions {
     /// Skip certificate verification.
     pub insecure: bool,
@@ -29,6 +31,17 @@ pub struct TlsOptions {
     pub ca_pem: Option<Vec<u8>>,
     /// Override ALPN (e.g. force http/1.1).
     pub alpn: Option<Vec<String>>,
+    /// Allow session resumption (when the profile does). The session_ticket extension is
+    /// still advertised as the profile says; only cached sessions are not offered.
+    pub resumption: bool,
+    /// Allow ECH GREASE (when the profile does). Turning it off changes the fingerprint.
+    pub ech_grease: bool,
+}
+
+impl Default for TlsOptions {
+    fn default() -> Self {
+        TlsOptions { insecure: false, ca_pem: None, alpn: None, resumption: true, ech_grease: true }
+    }
 }
 
 fn session_key_index() -> boring2::ex_data::Index<boring2::ssl::Ssl, String> {
@@ -271,7 +284,8 @@ impl TlsConnector {
         }
 
         let sessions: SessionCache = Arc::new(Mutex::new(HashMap::new()));
-        if tls.resumption {
+        let resumption = tls.resumption && opts.resumption;
+        if resumption {
             b.set_session_cache_mode(SslSessionCacheMode::CLIENT);
             let cache = sessions.clone();
             b.set_new_session_callback(move |ssl, session| {
@@ -281,7 +295,13 @@ impl TlsConnector {
             });
         }
 
-        Ok(TlsConnector { connector: b.build(), profile, sessions })
+        Ok(TlsConnector {
+            connector: b.build(),
+            profile,
+            sessions,
+            resumption,
+            ech_grease: tls.ech_grease && opts.ech_grease,
+        })
     }
 
     /// Run the TLS handshake on `stream` for `host`.
@@ -291,7 +311,7 @@ impl TlsConnector {
     {
         let tls = &self.profile.tls;
         let mut cfg = self.connector.configure()?;
-        if tls.ech_grease {
+        if self.ech_grease {
             cfg.set_enable_ech_grease(true);
         }
         if !tls.alps.is_empty() {
@@ -308,7 +328,7 @@ impl TlsConnector {
         let key = format!("{host}:{port}");
         let mut ssl = cfg.into_ssl(host)?;
         ssl.set_ex_data(session_key_index(), key.clone());
-        if tls.resumption {
+        if self.resumption {
             if let Some(sess) = self.sessions.lock().unwrap().get(&key) {
                 // SAFETY: the session comes from a context built by this connector.
                 unsafe {

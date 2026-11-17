@@ -1,0 +1,119 @@
+# Reusable workflow: builds the napi addon for every published target, runs the
+# Rust and JS tests on the (native) runner and uploads `mirage-tls.<platform>.node`
+# as the artifact `bindings-<target>`. Called by ci.yml and release.yml.
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      run-tests:
+        description: Run cargo and JS tests after building
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # Network tests (tls.peet.ws, httpbin) are opt-in and skipped here; add
+  # MIRAGE_ONLINE_TESTS: '1' to run them.
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          # macos-13 runners were retired in Dec 2025; macos-15-intel is the x64 image.
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          # The glibc of the build image is the minimum glibc users need (24.04: 2.39).
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - name: Disable CRLF conversion (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v5
+
+      # BoringSSL is built from source by vendor/boring-sys2: it needs git (to apply
+      # the patches), CMake, a C/C++ compiler and libclang (bindgen).
+      # No Go, Perl or NASM: the assembly is pregenerated, and on Windows the build
+      # script sets OPENSSL_NO_ASM.
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake clang libclang-dev
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: command -v cmake || brew install cmake
+
+      - name: Locate libclang (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --version
+          $llvm = 'C:\Program Files\LLVM\bin'
+          if (-not (Test-Path "$llvm\libclang.dll")) { choco install llvm -y --no-progress }
+          "LIBCLANG_PATH=$llvm" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: crates/mirage-napi/package-lock.json
+
+      - uses: oven-sh/setup-bun@v2
+        if: inputs.run-tests
+        with:
+          bun-version: latest
+
+      - name: npm ci
+        working-directory: crates/mirage-napi
+        run: npm ci
+
+      - name: Build napi addon
+        working-directory: crates/mirage-napi
+        run: npm run build -- --target ${{ matrix.target }}
+
+      # Same profile and target as the napi build, so the BoringSSL build is reused.
+      - name: cargo test -p mirage-core
+        if: inputs.run-tests
+        run: cargo test --release --target ${{ matrix.target }} -p mirage-core
+
+      - name: JS tests (Node + Bun)
+        if: inputs.run-tests
+        working-directory: crates/mirage-napi
+        run: npm test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.target }}
+          path: crates/mirage-napi/mirage-tls.*.node
+          if-no-files-found: error
