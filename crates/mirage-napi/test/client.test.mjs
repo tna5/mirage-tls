@@ -32,7 +32,12 @@ before(async () => {
         req.on('data', c => chunks.push(c))
         req.on('end', () => {
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify({ method: req.method, body: Buffer.concat(chunks).toString(), ua: req.headers['user-agent'] }))
+          res.end(JSON.stringify({
+            method: req.method,
+            body: Buffer.concat(chunks).toString(),
+            ua: req.headers['user-agent'],
+            platform: req.headers['sec-ch-ua-platform'] ?? null,
+          }))
         })
         break
       }
@@ -89,6 +94,28 @@ test('sends a POST body and the profile user-agent', async () => {
   assert.equal(d.method, 'POST')
   assert.equal(d.body, 'ping')
   assert.match(d.ua, /Firefox\//)
+})
+
+test('os option selects the browser platform', async () => {
+  const win = await (await fetch(`${base}/echo`, { browser: 'chrome', os: 'windows' })).json()
+  assert.match(win.ua, /\(Windows NT 10\.0; Win64; x64\).*Chrome\//)
+  assert.equal(win.platform, '"Windows"')
+
+  const mac = await (await fetch(`${base}/echo`, { browser: 'chrome' })).json()
+  assert.equal(mac.platform, '"macOS"')
+
+  const ff = await (await fetch(`${base}/echo`, { browser: 'firefox_158', os: 'windows' })).json()
+  assert.match(ff.ua, /Windows NT 10\.0.*Firefox\/158/)
+
+  const s = new Session({ browser: 'edge', os: 'windows' })
+  assert.equal(s.profile.meta.platform, 'windows')
+  s.close()
+})
+
+test('os option rejects platforms a browser does not have', () => {
+  assert.throws(() => new Session({ browser: 'safari', os: 'windows' }))
+  assert.throws(() => new Session({ browser: 'chrome_windows', os: 'linux' }))
+  assert.throws(() => new Session({ profile: { extends: 'chrome' }, os: 'windows' }), TypeError)
 })
 
 test('reads chunked bodies and reuses keep-alive connections', async () => {

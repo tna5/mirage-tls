@@ -13,11 +13,20 @@ export type BrowserProfile =
   | 'okhttp'
   | (string & {})
 
+/**
+ * Operating system the browser profile runs on (User-Agent, sec-ch-ua-platform...).
+ * chrome: macos (default), windows, linux, android. edge: windows (default), macos.
+ * firefox: macos (default), windows, linux, android. safari_ios: iphone (default), ipad.
+ */
+export type BrowserOs = 'windows' | 'macos' | 'linux' | 'android' | 'iphone' | 'ipad' | (string & {})
+
 export type HeadersLike = Headers | Record<string, string | string[] | undefined> | Array<[string, string]>
 
 export interface SessionOptions {
   /** Built-in profile, default "chrome" (latest). */
   browser?: BrowserProfile
+  /** OS of the browser, e.g. `{ browser: 'chrome', os: 'windows' }` (= "chrome_windows"). */
+  os?: BrowserOs
   /** Custom profile object/JSON. Use `extends: "<builtin>"` to override only some fields. */
   profile?: CustomProfile | string
   /** http://user:pass@host:port, socks5://host:port, socks5h://host:port */

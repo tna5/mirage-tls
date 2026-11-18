@@ -20,6 +20,14 @@ await s.fetch('https://example.com/login', { method: 'POST', json: { user: 'me' 
 ## Profiles
 
 A profile name is `<family>[_<version>][_<platform>]`, e.g. `chrome`, `chrome_157_windows`, `safari_ios_26_ipad`.
+The platform can also be given separately with `os`:
+
+```js
+await fetch(url, { browser: 'chrome', os: 'windows' }) // same as browser: 'chrome_windows'
+const s = new Session({ browser: 'firefox_158', os: 'linux' })
+```
+
+The OS only changes what the browser itself changes (User-Agent, `sec-ch-ua-platform`); the TLS and HTTP/2 fingerprints of a given browser version are the same on every desktop OS.
 
 | Family | Versions | Platforms | Status |
 |---|---|---|---|

@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `os` option for `fetch()` and `Session` (`{ browser: 'chrome', os: 'windows' }`),
+  equivalent to the `<family>_<platform>` profile name.
+
 ## [0.1.0]
 
 First public release.

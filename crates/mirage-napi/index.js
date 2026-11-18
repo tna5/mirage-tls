@@ -68,6 +68,15 @@ function buildResponse(res, method) {
   return response
 }
 
+/** `browser` + `os` → built-in profile name ("chrome" + "windows" → "chrome_windows"). */
+function withOs({ browser, os, profile }) {
+  if (os === undefined || os === null || os === '') return browser
+  if (typeof os !== 'string' || !/^[a-z]+$/i.test(os)) throw new TypeError(`invalid os: ${os}`)
+  if (profile !== undefined) throw new TypeError('`os` applies to a built-in `browser`, not to a custom `profile`')
+  // The engine validates the result (unknown platform for the family, two platforms...).
+  return `${browser || 'chrome'}_${os.toLowerCase()}`
+}
+
 class Session {
   /**
    * @param {import('./index').SessionOptions} [options]
@@ -76,7 +85,7 @@ class Session {
     const profile =
       options.profile && typeof options.profile === 'object' ? JSON.stringify(options.profile) : options.profile
     this._native = new native.NativeSession({
-      browser: options.browser,
+      browser: withOs(options),
       profile,
       proxy: options.proxy,
       insecure: options.insecure,
@@ -177,7 +186,7 @@ class Session {
 }
 
 const SESSION_KEYS = [
-  'browser', 'profile', 'proxy', 'insecure', 'ca', 'connectTimeout', 'maxRedirects', 'http1Only',
+  'browser', 'os', 'profile', 'proxy', 'insecure', 'ca', 'connectTimeout', 'maxRedirects', 'http1Only',
 ]
 const sessions = new Map()
 
