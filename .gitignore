@@ -22,3 +22,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Copied into the npm package by scripts/prepack.js.
+crates/mirage-napi/assets/

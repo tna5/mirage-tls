@@ -47,6 +47,7 @@
     "native.js",
     "native.d.ts",
     "THIRD_PARTY_NOTICES.md",
+    "assets/banner.svg",
     "mirage-tls.darwin-arm64.node",
     "mirage-tls.darwin-x64.node",
     "mirage-tls.linux-x64-gnu.node",
@@ -75,7 +76,7 @@
     "build:debug": "napi build --platform --js native.js --dts native.d.ts",
     "test": "node --test test/ && bun test test/",
     "artifacts": "napi artifacts --output-dir artifacts",
-    "prepack": "node -e \"for (const f of ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md']) require('fs').copyFileSync('../../' + f, f)\"",
+    "prepack": "node scripts/prepack.js",
     "prepublishOnly": "node scripts/check-binaries.js"
   },
   "devDependencies": {

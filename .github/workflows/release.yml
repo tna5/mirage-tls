@@ -84,3 +84,13 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: crates/mirage-napi/mirage-tls.*.node
+
+  github-packages:
+    name: GitHub Packages
+    needs: publish
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/github-packages.yml
+    with:
+      tag: ${{ github.ref_name }}
