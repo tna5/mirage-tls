@@ -974,6 +974,14 @@ mod tests {
     #[tokio::test]
     async fn header_table_size_update_is_emitted() {
         let (c, mut peer) = pair(&[(0x1, 0)]).await;
+        // The update is only due once the client has processed our SETTINGS: wait for its
+        // ACK, otherwise the request may legitimately be encoded with the old table size.
+        loop {
+            let (t, fl, _, _) = peer.frame().await;
+            if t == SETTINGS && fl & 0x1 != 0 {
+                break;
+            }
+        }
         let r = get(&c);
         let (_, id, p) = {
             // read raw: the decoder must see the size update first

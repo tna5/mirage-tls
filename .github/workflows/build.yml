@@ -28,7 +28,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          # The macos-14 label is rejected by GitHub ("configuration not supported").
+          - os: macos-15
             target: aarch64-apple-darwin
           # macos-13 runners were retired in Dec 2025; macos-15-intel is the x64 image.
           - os: macos-15-intel
