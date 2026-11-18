@@ -51,7 +51,6 @@ Profiles that were not compared against a real capture must keep
 ## Releasing
 
 Maintainers: bump `version` in `crates/mirage-napi/package.json` with
-`npm version <x.y.z> --no-git-tag-version` (the `version` script runs
-`napi version` to update `npm/*/package.json`), update `CHANGELOG.md`, commit,
+`npm version <x.y.z> --no-git-tag-version`, update `CHANGELOG.md`, commit,
 then push a tag `v<x.y.z>`. The `Release` workflow builds every target and
-publishes to npm.
+publishes the single `mirage-tls` package (all prebuilt binaries inside) to npm.

@@ -6,8 +6,8 @@ node_modules/
 *.tgz
 npm-debug.log*
 
-# napi-rs build outputs: native addons are built in CI and shipped in the
-# per-platform packages (crates/mirage-napi/npm/<platform>/), never committed.
+# napi-rs build outputs: native addons are built in CI and shipped inside the
+# mirage-tls npm package, never committed.
 *.node
 crates/mirage-napi/artifacts/
 
@@ -15,8 +15,6 @@ crates/mirage-napi/artifacts/
 crates/mirage-napi/README.md
 crates/mirage-napi/LICENSE
 crates/mirage-napi/THIRD_PARTY_NOTICES.md
-crates/mirage-napi/npm/*/LICENSE
-crates/mirage-napi/npm/*/THIRD_PARTY_NOTICES.md
 
 # OS / editors
 .DS_Store

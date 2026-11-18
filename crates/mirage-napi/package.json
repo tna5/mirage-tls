@@ -46,7 +46,12 @@
     "index.d.ts",
     "native.js",
     "native.d.ts",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "mirage-tls.darwin-arm64.node",
+    "mirage-tls.darwin-x64.node",
+    "mirage-tls.linux-x64-gnu.node",
+    "mirage-tls.linux-arm64-gnu.node",
+    "mirage-tls.win32-x64-msvc.node"
   ],
   "napi": {
     "binaryName": "mirage-tls",
@@ -71,8 +76,7 @@
     "test": "node --test test/ && bun test test/",
     "artifacts": "napi artifacts --output-dir artifacts",
     "prepack": "node -e \"for (const f of ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md']) require('fs').copyFileSync('../../' + f, f)\"",
-    "prepublishOnly": "napi pre-publish -t npm --skip-optional-publish --no-gh-release",
-    "version": "napi version"
+    "prepublishOnly": "node scripts/check-binaries.js"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.4.0"
