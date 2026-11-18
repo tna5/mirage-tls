@@ -6,9 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2]
+
+### Fixed
+
+- README banner on npmjs.com (404): the banner now ships in the package and the
+  published README loads it from jsDelivr.
+
+### Added
+
+- The package is also published to GitHub Packages as `@tna5/mirage-tls`.
+
 ## [0.1.1]
 
-First version published on npm (0.1.0 was only tagged on GitHub).
+First single-package release (0.1.0 was published as one npm package per platform).
 
 ### Added
 
@@ -46,6 +57,7 @@ First public release.
   capture; the other profiles are unverified.
 - Response bodies are buffered (no streaming yet). No WebSocket, no HTTP/3.
 
-[Unreleased]: https://github.com/tna5/mirage-tls/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/tna5/mirage-tls/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/tna5/mirage-tls/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tna5/mirage-tls/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tna5/mirage-tls/releases/tag/v0.1.0

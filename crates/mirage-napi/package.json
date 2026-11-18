@@ -1,6 +1,6 @@
 {
   "name": "mirage-tls",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "fetch() with real browser TLS / HTTP2 fingerprints (Chrome, Edge, Firefox, Safari, iOS, OkHttp) for Node.js and Bun",
   "keywords": [
     "fetch",
