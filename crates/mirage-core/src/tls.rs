@@ -285,6 +285,7 @@ impl TlsConnector {
 
         let sessions: SessionCache = Arc::new(Mutex::new(HashMap::new()));
         let resumption = tls.resumption && opts.resumption;
+        let ech_grease = tls.ech_grease && opts.ech_grease;
         if resumption {
             b.set_session_cache_mode(SslSessionCacheMode::CLIENT);
             let cache = sessions.clone();
@@ -300,7 +301,7 @@ impl TlsConnector {
             profile,
             sessions,
             resumption,
-            ech_grease: tls.ech_grease && opts.ech_grease,
+            ech_grease,
         })
     }
 

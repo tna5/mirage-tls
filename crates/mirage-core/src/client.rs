@@ -1,19 +1,26 @@
 //! High level client: connection pooling, header ordering, cookies, redirects, decoding.
 
+use crate::body::Body;
 use crate::conn::MaybeTls;
 use crate::error::{Error, Result};
-use crate::h1::H1Conn;
+use crate::h1::{H1Body, H1Conn};
 use crate::h2::H2Conn;
+use crate::net::{IpFamily, NetOptions};
 use crate::profile::Profile;
 use crate::proxy::{self, Proxy};
 use crate::tls::{TlsConnector, TlsOptions};
-use crate::RawResponse;
+use crate::ResponseHead;
 use bytes::Bytes;
 use cookie_store::{CookieStore, RawCookie};
 use std::collections::{HashMap, HashSet};
+use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::time::Instant;
 use url::Url;
+
+/// Redirect bodies smaller than this are drained so the connection can be reused.
+const MAX_DRAIN: usize = 64 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct ClientOptions {
@@ -33,6 +40,14 @@ pub struct ClientOptions {
     pub default_headers: bool,
     /// Headers added to every request (override profile defaults).
     pub headers: Vec<(String, String)>,
+    /// Source address to bind outgoing connections to.
+    pub local_address: Option<IpAddr>,
+    /// Address family used to reach the target (or the proxy).
+    pub ip_family: IpFamily,
+    /// Allow TLS session resumption (when the profile does).
+    pub tls_resumption: bool,
+    /// Allow ECH GREASE (when the profile does). Turning it off changes the fingerprint.
+    pub ech_grease: bool,
 }
 
 impl ClientOptions {
@@ -50,6 +65,10 @@ impl ClientOptions {
             http1_only: false,
             default_headers: true,
             headers: Vec::new(),
+            local_address: None,
+            ip_family: IpFamily::Auto,
+            tls_resumption: true,
+            ech_grease: true,
         }
     }
 }
@@ -94,6 +113,41 @@ impl Response {
     }
 }
 
+/// A response whose body has not been read yet. The body is decoded
+/// (Content-Encoding) while streaming and is subject to the request timeout.
+pub struct StreamResponse {
+    pub status: u16,
+    pub status_text: String,
+    pub version: String,
+    pub url: String,
+    pub redirected: bool,
+    pub headers: Vec<(String, String)>,
+    pub body: Body,
+}
+
+impl StreamResponse {
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Read the whole body.
+    pub async fn into_response(self) -> Result<Response> {
+        let body = self.body.bytes().await?;
+        Ok(Response {
+            status: self.status,
+            status_text: self.status_text,
+            version: self.version,
+            url: self.url,
+            redirected: self.redirected,
+            headers: self.headers,
+            body,
+        })
+    }
+}
+
 #[derive(Default)]
 struct Pool {
     h2: HashMap<String, H2Conn>,
@@ -107,6 +161,7 @@ struct Inner {
     profile: Arc<Profile>,
     tls: TlsConnector,
     proxy: Option<Proxy>,
+    net: NetOptions,
     pool: Mutex<Pool>,
     cookies: Mutex<CookieStore>,
     order: HashMap<String, usize>,
@@ -130,9 +185,12 @@ impl Client {
             insecure: opts.insecure,
             ca_pem: opts.ca_pem.clone(),
             alpn: opts.http1_only.then(|| vec!["http/1.1".to_string()]),
+            resumption: opts.tls_resumption,
+            ech_grease: opts.ech_grease,
         };
         let tls = TlsConnector::new(profile.clone(), &tls_opts)?;
         let proxy = opts.proxy.as_deref().map(Proxy::parse).transpose()?;
+        let net = NetOptions { local_address: opts.local_address, family: opts.ip_family };
         let order = profile
             .header_order()
             .into_iter()
@@ -151,6 +209,7 @@ impl Client {
                 profile,
                 tls,
                 proxy,
+                net,
                 pool: Mutex::new(Pool::default()),
                 cookies: Mutex::new(CookieStore::default()),
                 order,
@@ -163,11 +222,18 @@ impl Client {
         &self.inner.profile
     }
 
+    /// Send a request and buffer the whole (decoded) body.
     pub async fn request(&self, req: Request) -> Result<Response> {
-        let timeout = req.timeout.or(self.inner.opts.timeout);
-        let fut = self.inner.clone().execute(req);
-        match timeout {
-            Some(t) => tokio::time::timeout(t, fut).await.map_err(|_| Error::Timeout)?,
+        self.request_stream(req).await?.into_response().await
+    }
+
+    /// Send a request; resolves once the final response head arrives. The timeout covers
+    /// the whole exchange, body included.
+    pub async fn request_stream(&self, req: Request) -> Result<StreamResponse> {
+        let deadline = req.timeout.or(self.inner.opts.timeout).map(|t| Instant::now() + t);
+        let fut = self.inner.clone().execute(req, deadline);
+        match deadline {
+            Some(d) => tokio::time::timeout_at(d, fut).await.map_err(|_| Error::Timeout)?,
             None => fut.await,
         }
     }
@@ -219,6 +285,18 @@ fn parse_url(s: &str) -> Result<Url> {
     }
 }
 
+/// Read (and discard) a small redirect body so a keep-alive connection goes back to the
+/// pool; larger ones are dropped, which closes / cancels the stream.
+async fn drain(mut body: Body) {
+    let mut n = 0;
+    while let Ok(Some(c)) = body.chunk().await {
+        n += c.len();
+        if n > MAX_DRAIN {
+            break;
+        }
+    }
+}
+
 fn is_redirect(status: u16) -> bool {
     matches!(status, 301 | 302 | 303 | 307 | 308)
 }
@@ -228,7 +306,7 @@ fn same_origin(a: &Url, b: &Url) -> bool {
 }
 
 impl Inner {
-    async fn execute(self: Arc<Self>, req: Request) -> Result<Response> {
+    async fn execute(self: Arc<Self>, req: Request, deadline: Option<Instant>) -> Result<StreamResponse> {
         let mut url = parse_url(&req.url)?;
         let mut method = req.method.to_ascii_uppercase();
         if method.is_empty() {
@@ -242,10 +320,10 @@ impl Inner {
 
         for _ in 0..=self.opts.max_redirects {
             let logical = self.logical_headers(&url, &method, &headers, &body, defaults);
-            let raw = self.send(&method, &url, logical, Bytes::from(body.clone())).await?;
+            let (head, raw_body) = self.send(&method, &url, logical, Bytes::from(body.clone())).await?;
 
             if self.opts.cookies {
-                let set: Vec<RawCookie<'static>> = raw
+                let set: Vec<RawCookie<'static>> = head
                     .headers
                     .iter()
                     .filter(|(k, _)| k.eq_ignore_ascii_case("set-cookie"))
@@ -256,21 +334,22 @@ impl Inner {
                 }
             }
 
-            let location = raw
+            let location = head
                 .headers
                 .iter()
                 .find(|(k, _)| k.eq_ignore_ascii_case("location"))
                 .map(|(_, v)| v.clone());
-            if follow && is_redirect(raw.status) {
+            if follow && is_redirect(head.status) {
                 if let Some(loc) = location {
+                    drain(raw_body).await;
                     let next = url
                         .join(&loc)
                         .map_err(|e| Error::Url(format!("bad redirect location '{loc}': {e}")))?;
                     if !matches!(next.scheme(), "http" | "https") {
                         return Err(Error::Url(format!("redirect to unsupported scheme: {next}")));
                     }
-                    if raw.status == 303 && method != "HEAD"
-                        || matches!(raw.status, 301 | 302) && method == "POST"
+                    if head.status == 303 && method != "HEAD"
+                        || matches!(head.status, 301 | 302) && method == "POST"
                     {
                         method = "GET".into();
                         body.clear();
@@ -292,22 +371,22 @@ impl Inner {
                 }
             }
 
-            let encoding = raw
+            let encoding = head
                 .headers
                 .iter()
                 .find(|(k, _)| k.eq_ignore_ascii_case("content-encoding"))
                 .map(|(_, v)| v.clone());
-            let body = match encoding {
-                Some(enc) if !raw.body.is_empty() => crate::body::decode(&enc, raw.body)?,
-                _ => raw.body,
-            };
-            return Ok(Response {
-                status: raw.status,
-                status_text: raw.reason,
-                version: raw.version,
+            let mut body = raw_body.with_deadline(deadline);
+            if let Some(enc) = encoding.filter(|_| method != "HEAD") {
+                body = body.decode(&enc);
+            }
+            return Ok(StreamResponse {
+                status: head.status,
+                status_text: head.reason,
+                version: head.version,
                 url: url.to_string(),
                 redirected,
-                headers: raw.headers,
+                headers: head.headers,
                 body,
             });
         }
@@ -391,7 +470,13 @@ impl Inner {
         }
     }
 
-    async fn send(&self, method: &str, url: &Url, headers: Vec<(String, String)>, body: Bytes) -> Result<RawResponse> {
+    async fn send(
+        self: &Arc<Self>,
+        method: &str,
+        url: &Url,
+        headers: Vec<(String, String)>,
+        body: Bytes,
+    ) -> Result<(ResponseHead, Body)> {
         let https = url.scheme() == "https";
         let host = url
             .host_str()
@@ -412,13 +497,20 @@ impl Inner {
         };
 
         for attempt in 0..2 {
+            let can_retry = attempt == 0;
             let conn = self.checkout(&key, &host, port, https).await?;
             match conn {
                 Conn::H2(c) => {
                     let ordered = self.order_headers(headers.clone());
-                    return c
+                    match c
                         .request(method, url.scheme(), &authority, &path, &ordered, body.clone())
-                        .await;
+                        .await
+                    {
+                        Ok((head, b)) => return Ok((head, Body::h2(b))),
+                        // REFUSED_STREAM / GOAWAY: the server did not process it.
+                        Err(Error::Refused(_)) if can_retry => continue,
+                        Err(e) => return Err(e),
+                    }
                 }
                 Conn::H1(mut c, reused) => {
                     let mut h = headers.clone();
@@ -435,15 +527,20 @@ impl Inner {
                         .into_iter()
                         .map(|(k, v)| (self.h1_name(&k), v))
                         .collect();
-                    match c.request(method, &path, &ordered, &body).await {
-                        Ok((resp, keep)) => {
-                            if keep {
-                                self.pool.lock().unwrap().h1.entry(key.clone()).or_default().push(c);
-                            }
-                            return Ok(resp);
+                    match c.send(method, &path, &ordered, &body).await {
+                        Ok((head, framing, keep)) => {
+                            // Back to the pool once the body has been fully read.
+                            let inner = Arc::downgrade(self);
+                            let pool_key = key.clone();
+                            let on_done = Box::new(move |c: H1Conn<MaybeTls>| {
+                                if let Some(inner) = inner.upgrade() {
+                                    inner.pool.lock().unwrap().h1.entry(pool_key).or_default().push(c);
+                                }
+                            });
+                            return Ok((head, Body::h1(H1Body::new(c, framing, keep, on_done))));
                         }
                         // A pooled keep-alive connection may have been closed by the server.
-                        Err(_) if reused && attempt == 0 => continue,
+                        Err(_) if reused && can_retry => continue,
                         Err(e) => return Err(e),
                     }
                 }
@@ -507,7 +604,7 @@ impl Inner {
             .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case("user-agent"))
             .map(|(_, v)| v.as_str());
-        let tcp = proxy::connect(self.proxy.as_ref(), host, port, ua).await?;
+        let tcp = proxy::connect(self.proxy.as_ref(), host, port, ua, &self.net).await?;
         if !https {
             return Ok(MaybeTls::Plain(tcp));
         }
