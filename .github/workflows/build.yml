@@ -37,12 +37,17 @@ jobs:
           # The glibc of the build image is the minimum glibc users need (24.04: 2.39).
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            strip: debuginfo
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            strip: debuginfo
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
+      # Linux .node files otherwise ship the line tables (~13 MB instead of ~3 MB). Not on
+      # macOS: dyld rejects dylibs linked without debug info (see Cargo.toml).
+      CARGO_PROFILE_RELEASE_STRIP: ${{ matrix.strip || 'none' }}
     steps:
       - name: Disable CRLF conversion (Windows)
         if: runner.os == 'Windows'

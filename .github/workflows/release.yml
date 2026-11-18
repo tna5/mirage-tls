@@ -1,7 +1,8 @@
 # Release: push a tag `v<version>` matching crates/mirage-napi/package.json "version".
 # Builds all targets, publishes the per-platform packages (mirage-tls-<platform>)
-# and then the main `mirage-tls` package to npm with provenance, and creates a
-# GitHub release with the .node binaries attached.
+# and then the main `mirage-tls` package to npm, and creates a GitHub release with
+# the .node binaries attached. Needs the NPM_TOKEN secret (granular token, publish).
+# No --provenance: npm only accepts it from a public repository.
 name: Release
 
 on:
@@ -27,7 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
     defaults:
       run:
         working-directory: crates/mirage-napi
@@ -79,13 +79,13 @@ jobs:
               echo "$name@$version already published, skipping"
               continue
             fi
-            (cd "$dir" && npm publish --provenance --access public --tag "${{ steps.version.outputs.dist_tag }}")
+            (cd "$dir" && npm publish --access public --tag "${{ steps.version.outputs.dist_tag }}")
           done
 
       # prepublishOnly runs `napi pre-publish` (sets optionalDependencies, validates
       # npm/<platform>) and prepack copies README.md / LICENSE / THIRD_PARTY_NOTICES.md.
       - name: Publish mirage-tls
-        run: npm publish --provenance --access public --tag "${{ steps.version.outputs.dist_tag }}"
+        run: npm publish --access public --tag "${{ steps.version.outputs.dist_tag }}"
 
       - name: GitHub release
         uses: softprops/action-gh-release@v2
