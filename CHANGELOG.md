@@ -6,10 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1]
+
+First version published on npm (0.1.0 was only tagged on GitHub).
+
 ### Added
 
 - `os` option for `fetch()` and `Session` (`{ browser: 'chrome', os: 'windows' }`),
   equivalent to the `<family>_<platform>` profile name.
+- `Client::request_stream` in `mirage-core`: streaming, decoded response bodies.
+
+### Changed
+
+- One npm package: `mirage-tls` ships every prebuilt binary and loads the one for
+  the current OS / architecture (no more `mirage-tls-<platform>` packages).
+- Linux binaries are built without debug info (~6 MB instead of ~41 MB).
 
 ## [0.1.0]
 
@@ -35,5 +46,6 @@ First public release.
   capture; the other profiles are unverified.
 - Response bodies are buffered (no streaming yet). No WebSocket, no HTTP/3.
 
-[Unreleased]: https://github.com/tna5/mirage-tls/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/tna5/mirage-tls/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/tna5/mirage-tls/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tna5/mirage-tls/releases/tag/v0.1.0
